@@ -1,7 +1,7 @@
 /**
- * @File rwlock.h
+ * @file rwlock.h
  *
- * The header file that you need to implement for assignment 3.
+ * Reader/writer lock with selectable contention policy.
  *
  * @author Andrew Quinn, Mitchell Elliott, and Gurpreet Dhillon.
  */
@@ -10,49 +10,37 @@
 
 #include <stdint.h>
 
-/** @struct rwlock_t
- *
- *  @brief This typedef renames the struct rwlock.  Your `c` file
- *  should define the variables that you need for your reader/writer
- *  lock.
- */
+/** Opaque, non-recursive lock. Lock upgrades and downgrades are unsupported. */
 typedef struct rwlock rwlock_t;
 
+/** READERS/WRITERS favor the corresponding waiting operation. N_WAY allows a
+ * batch of up to n reader admissions before a waiting writer is admitted.
+ */
 typedef enum { READERS, WRITERS, N_WAY } PRIORITY;
 
-/** @brief Dynamically allocates and initializes a new rwlock with
- *         priority p, and, if using N_WAY priority, n.
- *
- *  @param The priority of the rwlock
- *
- *  @param The n value, if using N_WAY priority
- *
- *  @return a pointer to a new rwlock_t
+/** Allocate and initialize a lock with policy p.
+ * p must be a PRIORITY value. For N_WAY, n must be in 1..INT_MAX; otherwise n is
+ * ignored. Returns NULL on allocation or pthread initialization failure.
  */
 rwlock_t *rwlock_new(PRIORITY p, uint32_t n);
 
-/** @brief Delete your rwlock and free all of its memory.
- *
- *  @param rw the rwlock to be deleted.  Note, you should assign the
- *  passed in pointer to NULL when returning (i.e., you should set *rw
- *  = NULL after deallocation).
+/** Release lock storage and set *rw to NULL. NULL arguments are accepted.
+ * All holders and waiting threads must have finished using the lock first.
  */
 void rwlock_delete(rwlock_t **rw);
 
-/** @brief acquire rw for reading
+/** Acquire shared access, blocking without a timeout until the policy permits
+ * entry. rw must be initialized and the caller must not already hold it.
  */
 void reader_lock(rwlock_t *rw);
 
-/** @brief release rw for reading--you can assume that the thread
- * releasing the lock has *already* acquired it for reading.
- */
+/** Release shared access previously acquired by this thread. */
 void reader_unlock(rwlock_t *rw);
 
-/** @brief acquire rw for writing
+/** Acquire exclusive access, blocking without a timeout until the policy permits
+ * entry. rw must be initialized and the caller must not already hold it.
  */
 void writer_lock(rwlock_t *rw);
 
-/** @brief release rw for writing--you can assume that the thread
- * releasing the lock has *already* acquired it for writing.
- */
+/** Release exclusive access previously acquired by this thread. */
 void writer_unlock(rwlock_t *rw);

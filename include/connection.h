@@ -7,50 +7,60 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+/** State for one HTTP request. The caller owns the socket descriptor.
+ * Operations are blocking, inherit socket timeouts, and are not thread-safe.
+ */
 typedef struct Conn conn_t;
 
-// Constructor
+/** Allocate request state for an open socket; returns NULL on allocation failure. */
 conn_t *conn_new(int connfd);
 
-// Destructor
+/** Free initialized state and set *conn to NULL; does not close the socket.
+ * conn and *conn must be non-NULL. All borrowed field pointers become invalid.
+ */
 void conn_delete(conn_t **conn);
 
-// Parse the data from connection. Checks static correctness (i.e.,
-// that each field fits within our required bounds), but does not
-// check for semantic correctness (e.g., does not check that a URI is
-// not a directory).
+/** Parse one request line and headers using the limits in protocol.h.
+ * Returns NULL on success or the response describing an error. Does not access
+ * the filesystem or consume the entire body. Call only once per connection.
+ */
 const Response_t *conn_parse(conn_t *conn);
 
-//////////////////////////////////////////////////////////////////////
-// Functions that get stuff we might need elsewhere from a connection
-
-// Return the RequestType from parsing.
+/** Return the parsed request type, or REQUEST_UNSUPPORTED for unknown methods. */
 const Request_t *conn_get_request(conn_t *conn);
 
-// Return the original method token, including unsupported methods.
+/** Borrow the original method token, including unsupported methods. */
 const char *conn_get_method(conn_t *conn);
 
-// Return URI from parsing.
+/** Borrow the parsed filename without the leading slash; NULL before parsing. */
 char *conn_get_uri(conn_t *conn);
 
-// Return the value for the header field named header.  Only
-// implemented for header named "Content-Length" and "Request-Id".
+/** Borrow a saved header value, or NULL if absent or unsupported.
+ * header must be exactly "Content-Length" or "Request-Id"; saved values preserve
+ * the request's text. Borrowed strings remain owned by conn and must not change.
+ */
 char *conn_get_header(conn_t *conn, char *header);
 
-//////////////////////////////////////////////////////////////////////
-// Functions that help get data from a connection
-
-// write the data form the connection into the file (fd).
+/** Receive the body into fd after successful parsing with a Content-Length.
+ * Returns NULL on success, BAD_REQUEST on early EOF, or INTERNAL_SERVER_ERROR
+ * on I/O failure. Partial output can remain in fd; the descriptor stays open.
+ */
 const Response_t *conn_recv_file(conn_t *conn, int fd);
 
-//////////////////////////////////////////////////////////////////////
-// Functions that help write responses to the client:
-
-// send a message body from the file (fd)
+/** Send a 200 response with count bytes from fd's current offset.
+ * count must be at most SSIZE_MAX. Does not close fd. Returns NULL on success or
+ * INTERNAL_SERVER_ERROR on I/O failure. Partial output may already have reached
+ * the client; callers must close the connection without sending another response.
+ */
 const Response_t *conn_send_file(conn_t *conn, int fd, uint64_t count);
 
-// send canonical message for a response type
+/** Send res with its canonical reason phrase as a newline-terminated body.
+ * res must be non-NULL. Returns NULL on success or INTERNAL_SERVER_ERROR on send
+ * failure. Partial output may already have reached the client.
+ */
 const Response_t *conn_send_response(conn_t *conn, const Response_t *res);
 
-//Functions for debugging:
+/** Allocate a diagnostic description; the caller frees it. DEBUG builds only. */
+#ifdef DEBUG
 char *conn_str(conn_t *conn);
+#endif

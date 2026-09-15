@@ -151,6 +151,10 @@ const Response_t *parse_headers(conn_t *conn) {
                     saved = &conn->cl;
                 } else if (strcasecmp(key, "Request-Id") == 0) {
                     saved = &conn->rid;
+                    if (strchr(value, ',') != NULL) {
+                        // Audit records use commas to separate fields.
+                        res = &RESPONSE_BAD_REQUEST;
+                    }
                 } else if (strcasecmp(key, "Transfer-Encoding") == 0) {
                     // This server only accepts bodies with a fixed Content-Length.
                     res = &RESPONSE_BAD_REQUEST;
@@ -264,14 +268,13 @@ const Response_t *conn_recv_file(conn_t *conn, int fd) {
 const Response_t *conn_send_file(conn_t *conn, int fd, uint64_t count) {
     char buf[MAX_HEADER_LEN + 1];
 
-    BufferedResult res = BR_OK;
-    sprintf(buf, "%s %d %s\r\nContent-Length: %lu\r\n\r\n", HTTP_VERSION,
+    sprintf(buf, "%s %d %s\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n", HTTP_VERSION,
         response_get_code(&RESPONSE_OK), response_get_message(&RESPONSE_OK), count);
 
-    res = bs_sendbuf(conn->bs, buf, strlen(buf));
-    if (res == BR_OK)
-        res = bs_sendfile(conn->bs, fd, count);
-
+    if (bs_sendbuf(conn->bs, buf, strlen(buf)) != BR_OK
+        || bs_sendfile(conn->bs, fd, count) != BR_OK) {
+        return &RESPONSE_INTERNAL_SERVER_ERROR;
+    }
     return NULL;
 }
 
@@ -280,12 +283,13 @@ const Response_t *conn_send_response(conn_t *conn, const Response_t *res) {
 
     char buf[MAX_HEADER_LEN + 1];
 
-    sprintf(buf, "%s %d %s\r\nContent-Length: %lu\r\n\r\n%s\n", HTTP_VERSION,
+    sprintf(buf, "%s %d %s\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n%s\n", HTTP_VERSION,
         response_get_code(res), response_get_message(res), strlen(response_get_message(res)) + 1,
         response_get_message(res));
 
-    bs_sendbuf(conn->bs, buf, strlen(buf));
-    return NULL;
+    return bs_sendbuf(conn->bs, buf, strlen(buf)) == BR_OK
+               ? NULL
+               : &RESPONSE_INTERNAL_SERVER_ERROR;
 }
 
 //Functions for debugging:

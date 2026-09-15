@@ -1,0 +1,59 @@
+# 1) Start a GET request.
+# 2) Send a full PUT request.
+# 3) Finish GET request body.
+
+[[events]]
+type = "LOAD"
+infile = "fixtures/payload-large.txt"
+outfile = "contended.txt"
+
+[[events]]
+type = "CREATE"
+method = "GET"
+uri = "contended.txt"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/payload-b.txt"
+id = 1
+
+# GET line
+[[events]]
+type = "SEND_LINE"
+id = 0
+
+# GET headers
+[[events]]
+type = "SEND_HEADERS"
+id = 0
+
+# GET "body".
+[[events]]
+type = "SEND_BODY"
+id = 0
+
+# GET part of response.
+[[events]]
+type = "RECV_PARTIAL"
+size = 750
+id = 0
+
+# Completely send PUT request.
+[[events]]
+type = "SEND_ALL"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 0
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"

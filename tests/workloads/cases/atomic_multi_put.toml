@@ -1,0 +1,190 @@
+# Five stalled PUTs require five workers and distinct 180,000-byte payloads.
+# Complete their bodies in reverse order, then read the resulting file.
+
+[[events]]
+type = "LOAD"
+infile = "fixtures/payload-large.txt"
+outfile = "contended.txt"
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/concurrent-put-0.txt"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/concurrent-put-1.txt"
+id = 1
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/concurrent-put-2.txt"
+id = 2
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/concurrent-put-3.txt"
+id = 3
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/concurrent-put-4.txt"
+id = 4
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 0
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 1
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 2
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 3
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 4
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 0
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 1
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 2
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 3
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 4
+
+# Send the first 75,000 bytes.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 0
+
+# Send the first 75,000 bytes.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 1
+
+# Send the first 75,000 bytes.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 2
+
+# Send the first 75,000 bytes.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 3
+
+# Send the first 75,000 bytes.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 4
+
+# Send the rest of the body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 4
+
+# Send the rest of the body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 3
+
+# Send the rest of the body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 2
+
+# Send the rest of the body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 1
+
+# Send the rest of the body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 0
+
+[[events]]
+type = "WAIT"
+id = 4
+
+[[events]]
+type = "WAIT"
+id = 3
+
+[[events]]
+type = "WAIT"
+id = 2
+
+[[events]]
+type = "WAIT"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "GET"
+uri = "contended.txt"
+id = 6
+
+[[events]]
+type = "SEND_ALL"
+id = 6
+
+[[events]]
+type = "WAIT"
+id = 6
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"

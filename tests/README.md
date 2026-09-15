@@ -1,78 +1,98 @@
 # Application tests
 
-Run from `examples/c-http-server` after building the server:
+Run from `examples/c-http-server/` after building the server:
 
 ```sh
 python3 tests/test_httpserver.py --binary build/httpserver --report-dir test-results/regression
-python3 tests/run_course.py --binary build/httpserver --report-dir test-results/course
+python3 tests/run_workloads.py --binary build/httpserver --report-dir test-results/workloads
 ```
 
-These commands require Linux and Python 3.11 or newer. They use only Python's
-standard library. The course client uses Linux `epoll`; thread checks read
-`/proc`. See the [application README](../README.md) for the Ubuntu container
-commands and the supported build targets.
+These commands require Linux and Python 3.11 or newer and use only Python's
+standard library. The workload client uses Linux `epoll`; thread checks read
+`/proc`. Run as an ordinary non-root user so permission checks remain meaningful.
+See the [application guide](../README.md) for container commands and Make targets.
 
-The regression suite has 13 test methods covering GET and PUT status codes,
-binary and empty files, independent and conflicting concurrent requests,
-restart persistence on the same port, incomplete bodies, malformed or oversized
-headers and lengths,
-unsupported methods, read-only files, symlink and directory protection, and
-invalid command-line arguments. The permission test expects an ordinary non-root
-user, as configured by the test container.
-Each method starts a server with a temporary document root. Client operations
-have a three-second socket timeout; startup is limited to five seconds.
+## HTTP regressions
 
-The course suite has 30 cases: all 26 supplied TOML workloads, a generated
-100-request mixed GET/PUT batch, and thread counts for the default, two-worker,
-and eight-worker configurations. The four `audit_*` workloads use one worker;
-`atomic_multi_put` uses five to accommodate its five deliberately stalled PUTs;
-other workloads use four. Every case runs in its own temporary document root,
-so fixture copies, requests, and replay operations cannot change repository data.
-The runner terminates its server even if a client or validator fails. Each helper
-process has a 45-second timeout, configurable with `--timeout`. The client's
-individual socket operations have a 15-second timeout.
+`test_httpserver.py` checks GET/PUT status codes, binary and empty files,
+independent and conflicting concurrent requests, restart persistence, incomplete
+bodies, malformed or oversized headers and lengths, unsupported methods,
+filesystem permissions, symlink and directory protection, and command-line
+validation. It also checks explicit connection closure, unambiguous audit request
+IDs, worker recovery from stalled readers and writers, upload cleanup, and bounded
+resident memory after 16,384 distinct missing-file requests. The memory check in
+`test_lock_lifecycle.py` reads Linux `/proc` after allocator warmup. Each test starts
+a server with a temporary document root. Ordinary client operations time out after
+three seconds; the server-inactivity checks allow up to 15 seconds.
 
-Both suites return a nonzero exit status on failure and write JUnit XML. The
-course report also retains the server audit log, client event log, and validator
-output for each case. Temporary document roots are removed after each case.
-To diagnose a single course case:
+## Concurrent workloads
+
+`run_workloads.py` runs 30 cases: the 26 TOML workloads in
+[`workloads/cases/`](workloads/cases/), a generated 100-request mixed GET/PUT
+batch, and thread counts for default, two-worker, and eight-worker configurations.
+The workloads exercise audit ordering, conflicting and independent requests,
+partial request lines, headers and bodies, slow readers, and atomic visibility
+while files are replaced.
+
+Each case has its own temporary document root, generated payloads, and server.
+The four `audit_*` cases use one worker; `atomic_multi_put` uses five workers for
+its five deliberately stalled PUTs; other request cases use four workers. Thread
+checks expect the worker count plus the main server thread.
+
+[`workloads/fixtures.py`](workloads/fixtures.py) generates distinct deterministic
+ASCII payloads locally. Six payloads range from 201,936 to 421,545 bytes; five
+additional 180,000-byte payloads exercise concurrent PUTs. All exceed the largest
+75,000-byte partial-body send. Cases refer to `fixtures/` within their temporary
+directory. No fixture download or repository data mutation is needed.
+
+The tools in [`workloads/tools/`](workloads/tools/) perform these checks:
+
+| Tool | Responsibility |
+| --- | --- |
+| `request_client.py` | Send staged requests from TOML and capture responses and client event order |
+| `validate_audit.py` | Reject missing or duplicate request IDs, inconsistent order, and response-status mismatches |
+| `validate_responses.py` | Replay operations in audit order and compare expected status codes and response bytes |
+| `generate_batch.py` | Produce GET/PUT batches for concurrency testing |
+
+## Reports and diagnosis
+
+Both suites return a nonzero status on failure and write `junit.xml` beneath
+their report directory. The workload suite retains a directory for every case:
+
+| Report | Contents |
+| --- | --- |
+| `server.log` | Server standard output |
+| `audit.log` | Server standard error, including audit records |
+| `requests.log` | Client events and helper errors |
+| `ordering.log` | Audit-order validator output |
+| `responses.log` | Response-replay validator output |
+| `failure.txt` | Failure summary, present only for a failed case |
+
+Thread-count cases produce server and audit logs. Temporary document roots and
+response bodies are removed after each case, including failures. Each server is
+terminated during cleanup, with a forced stop if it does not exit in two seconds.
+Startup has a five-second deadline. Workload helper processes have a 45-second
+timeout, configurable with `--timeout`; individual client socket operations have
+a 15-second timeout.
+
+Run an individual workload with:
 
 ```sh
-python3 tests/run_course.py --binary build/httpserver \
-  --report-dir test-results/course --case audit_get
+python3 tests/run_workloads.py --binary build/httpserver \
+  --report-dir test-results/workloads --case audit_get
 ```
 
-## Imported course tests
+Use a separate report directory when comparing runs. A selected-case run writes
+JUnit results only for that selection.
 
-`course/test_files`, `course/workloads`, and the four helpers under
-`course/test_scripts` came with the supplied systems-design assignment. The
-fixtures and workload intent are retained. Their authorship or redistribution
-license has not been inferred from the import.
+## Runtime image checks
 
-The original shell driver and wrappers were replaced because they could report
-success after failures, fail to detect startup timeouts, share mutable files,
-and omit supplied workloads. The unused duplicate request client was removed.
-The retained helpers have these focused corrections:
+`test_container.py` uses Docker and Python 3.11 or newer to check an already-built
+runtime image. It tests non-root startup, binary PUT/GET, concurrency, and data
+persistence across container replacement. It resolves the image tag to a local
+immutable image ID and removes its own temporary containers and volume:
 
-- TOML parsing uses `tomllib`; replay file operations use Python rather than
-  unchecked shell commands.
-- Audit validation rejects missing or duplicate request IDs and mismatched
-  response statuses; replay checks status codes as well as response bodies.
-- Unsupported-method requests use the valid token `INVALID`, return an expected
-  501 response, and participate in audit validation.
-- Sleep events do not create fictitious requests. Unknown workload events fail.
-- `two_slow_get_header_batch.toml` uses `SEND_HEADERS` consistently and unloads
-  its extra fixture. The old `slow_put_body` wrapper referenced a nonexistent
-  shell file; the runner selects the supplied TOML directly.
-- `atomic_multi_put` and `audit_unsupported`, omitted by the original wrappers,
-  now run with the rest of the workload set.
-
-- The five absent `atomic_multi_put` payloads are replaced with distinct,
-  deterministic 180 KB text files generated in its temporary fixture directory.
-  Their length preserves the workload’s 75 KB partial-body operations.
-- The client accepts a partial-read event after its poller has already finished
-  a small response; the complete response is still validated.
-- `atomic_get` originally attached bodies to GET requests while its comments
-  described APPEND and PUT operations. It now checks atomic reading directly:
-  partially receive a large GET response, submit a different PUT concurrently,
-  finish both, and validate a final GET against the replacement.
+```sh
+python3 tests/test_container.py --image c-http-server:local \
+  --report test-results/runtime.json
+```

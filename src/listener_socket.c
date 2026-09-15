@@ -1,16 +1,14 @@
 #define _GNU_SOURCE
-#include "asgn2_helper_funcs.h"
+#include "socket_io.h"
 
 #include <arpa/inet.h>
-#include <err.h>
 #include <errno.h>
 #include <netinet/in.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
-#include <sys/stat.h>
+#define CLIENT_IDLE_TIMEOUT_SECONDS 10
 
 int listener_init(Listener_Socket *sock, int port) {
     struct sockaddr_in addr = { 0 };
@@ -48,5 +46,17 @@ failed: {
 
 int listener_accept(Listener_Socket *sock) {
     int connfd = accept(sock->fd, NULL, NULL);
+    if (connfd < 0) {
+        return -1;
+    }
+
+    struct timeval timeout = { .tv_sec = CLIENT_IDLE_TIMEOUT_SECONDS, .tv_usec = 0 };
+    if (setsockopt(connfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0
+        || setsockopt(connfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        int saved_errno = errno;
+        close(connfd);
+        errno = saved_errno;
+        return -1;
+    }
     return connfd;
 }

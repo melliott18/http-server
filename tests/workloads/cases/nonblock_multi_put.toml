@@ -1,0 +1,60 @@
+# 1) Start a PUT request.
+# 2) Send a full PUT request.
+# 3) Finish PUT request body.
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/payload-b.txt"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "fixtures/payload-large.txt"
+id = 1
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 0
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 0
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 750
+id = 0
+
+# Completely send PUT request.
+[[events]]
+type = "SEND_ALL"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 1
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 0
+
+[[events]]
+type = "WAIT"
+id = 0
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"

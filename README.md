@@ -1,17 +1,17 @@
 # C HTTP server
 
-A Linux, POSIX-threaded file server imported from the owner's systems course assignment. It supports GET and PUT for a single filename in its working directory, with a bounded worker queue and per-file reader/writer locks. PUT creates or replaces persistent files. Audit records go to standard error.
+A Linux file service written in C with POSIX threads. It supports GET and PUT for a single filename in its working directory, with a bounded worker queue and per-file reader/writer locks. PUT creates or replaces persistent files. Audit records go to standard error.
 
-This is standalone application preparation for [#17](https://github.com/melliott18/pipeline/issues/17). Jenkins, Terraform provisioning, the shared application manifest, and automated releases are not implemented here. See [import notes](IMPORT.md) for provenance and cleanup, and [validation evidence](VALIDATION.md) for measured compatibility.
+This is standalone application preparation for [#17](https://github.com/melliott18/pipeline/issues/17). Jenkins, Terraform provisioning, the shared application manifest, and automated releases are not implemented here. See the [operations guide](OPERATIONS.md) for deployment requirements and [validation evidence](VALIDATION.md) for measured compatibility.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `src/`, `include/` | Server and supplied support library source; existing author notices retained |
+| `src/`, `include/` | Server and support library source |
 | `Makefile` | Explicit source build, dependency tracking, application test entry points |
 | `Dockerfile` | Ubuntu toolchain, build, test, and non-root runtime stages |
-| `tests/` | Isolated supplied workloads and focused HTTP regression tests |
+| `tests/` | Isolated concurrency workloads and focused HTTP regression tests |
 | `build/`, `test-results/`, `data/` | Ignored local outputs and development data |
 
 ## Build and test in Docker
@@ -23,7 +23,7 @@ docker build --target test -t c-http-server:test .
 docker run --name c-http-server-tests --network none c-http-server:test
 ```
 
-The test command exits nonzero on failure. After either success or failure, copy the supplied-suite reports and remove its disposable container:
+The test command exits nonzero on failure. After either success or failure, copy the test reports and remove its disposable container:
 
 ```sh
 docker cp c-http-server-tests:/app/test-results ./test-results
@@ -41,7 +41,7 @@ docker build --target test \
 docker run --rm --network none c-http-server:test-26.04
 ```
 
-Package versions come from the Ubuntu repository at build time; the base digest alone does not freeze the compiler packages. Record resolved versions with test evidence. This bootstrap does not claim byte-for-byte reproducible builds.
+Package versions come from the Ubuntu repository at build time; the base digest alone does not freeze the compiler packages. Record resolved versions with test evidence. Record package versions as well as the base image when reproducing a build.
 
 ## Run with persistent data
 
@@ -67,7 +67,7 @@ The example resource settings are development limits, not measured capacity guar
 
 ## Check the runtime image
 
-The host-side check uses Docker and Python 3.11 or newer. It resolves the supplied image tag to a local immutable image ID, then tests non-root startup, binary PUT/GET, concurrent requests, and persistence across container replacement. It creates and removes only its own temporary containers and volume:
+The host-side check uses Docker and Python 3.11 or newer. It resolves the specified image tag to a local immutable image ID, then tests non-root startup, binary PUT/GET, concurrent requests, and persistence across container replacement. It creates and removes only its own temporary containers and volume:
 
 ```sh
 python3 tests/test_container.py --image c-http-server:local \
@@ -90,13 +90,21 @@ cd data
 ../build/httpserver -t 4 8080
 ```
 
-Python 3.11 or newer is required for the test tools. Run tests as an ordinary user. `make test-regression` and `make test-course` run the suites separately; `make clean` removes compiled outputs. Each support module is compiled into `build/libhttp-support.a`; no imported binary archive is needed. Compiler errors, missing sources, failed tests, and timed-out workload cases return failure.
+Python 3.11 or newer is required for the test tools. Run tests as an ordinary user. `make test-regression` and `make test-workloads` run the suites separately; `make clean` removes compiled outputs. Each support module is compiled into `build/libhttp-support.a`; no precompiled support archive is needed. Compiler errors, missing sources, failed tests, and timed-out workload cases return failure.
 
-## Behavior and limits
+## HTTP interface
 
-- Startup: `httpserver [-t threads] <port>`; four workers by default; supported worker counts are 1–1024. Use an unprivileged TCP port. Only one HTTP request is handled per connection.
-- GET returns file bytes, 404 for a missing file, or 403 for an unsupported filesystem target. PUT requires Content-Length and returns 201 for creation or 200 for replacement.
-- Filenames and HTTP headers follow the original restricted assignment protocol. This is not a general HTTP framework: there is no TLS, authentication, directory browsing, chunked transfer, or keep-alive support. Any client that can reach it can PUT files.
-- Keep this development server on loopback or a trusted private network. Its locks can grow with the number of distinct filenames; it has no disk quota or complete defense against slow clients. Existing data permissions and content policy still need to be specified before deployment.
-- Termination does not drain active requests. An interrupted upload can leave a hidden temporary file; inspect stale files only while the server is stopped. Rename gives atomic visibility during normal operation, not a guarantee of durability across a host crash. Backups and data recovery are separate work.
-- Ubuntu container checks exercise Ubuntu userspace on the Docker host's Linux kernel. They do not validate the actual Ubuntu VM, a different CPU architecture, or the future CI/CD platform.
+- Startup: `httpserver [-t threads] <port>`; four workers by default; supported worker counts are 1–1024. Use an unprivileged TCP port. The process listens on all IPv4 interfaces; restrict exposure at the container or host boundary.
+- GET returns file bytes, 404 for a missing file, or 403 for a directory, symlink, or other unsupported filesystem target. PUT requires Content-Length and returns 201 for creation or 200 for replacement. Failed or incomplete uploads preserve the existing file.
+- Request targets are a single filename of 1–63 ASCII letters, digits, dots, or hyphens. Paths, percent encoding, and query strings are unsupported. The data directory is the process working directory.
+- Requests use HTTP/1.1 and CRLF line endings. Header names and values are limited to 128 characters each; the total header section is limited to 2,048 bytes. Headers use `Name: value` syntax. Content-Length and Request-Id names are case insensitive; duplicates are rejected.
+- The server handles one request per connection and sends `Connection: close`. It rejects Transfer-Encoding; it has no chunked transfer, keep-alive, TLS, authentication, or directory listing. Any client allowed to reach it can read and replace files.
+- Request-Id is optional and defaults to `0` in audit records. It must not contain commas. Standard error receives one comma-separated audit record per dispatched operation: `method,/filename,status,request-id`. A status records the response attempted, not confirmation that the client received every byte.
+
+## Resource and deployment limits
+
+- Accepted sockets have a ten-second inactivity timeout on each blocking read and write. Idle or stalled clients release their workers. A client that keeps transferring can extend the request; this is not a total request deadline.
+- The queue holds one pending socket per worker, in addition to active requests, the listening backlog, and at most one connection waiting to enter the queue. File locks exist only while requests reference a filename, including requests waiting on the lock.
+- Use a trusted private network or an authenticated reverse proxy. Set a total request deadline, body-size limit, concurrency limit, and a filesystem quota for the intended workload. Container memory limits do not limit persistent volume growth.
+- Termination does not drain active requests. An interrupted upload can leave a hidden temporary file. Rename gives atomic visibility during normal operation; it does not guarantee durability across a host crash. See [operations](OPERATIONS.md) for shutdown, backups, and recovery.
+- Linux ARM64 is the validated architecture. Ubuntu container checks exercise Ubuntu userspace on the Docker host's Linux kernel; they do not validate the actual Ubuntu VM or another CPU architecture. Verify a new target before release.

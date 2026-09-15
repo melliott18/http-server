@@ -1,4 +1,4 @@
-#include "asgn2_helper_funcs.h"
+#include "socket_io.h"
 #include "connection.h"
 #include "debug.h"
 #include "hashtable.h"
@@ -195,11 +195,7 @@ void handle_get(conn_t *conn) {
 
     pthread_mutex_lock(&mu);
 
-    rwlock_t *rwlock = ht_lookup(ht, uri);
-
-    if (!rwlock) {
-        rwlock = ht_insert(ht, uri);
-    }
+    rwlock_t *rwlock = ht_acquire(ht, uri);
 
     pthread_mutex_unlock(&mu);
 
@@ -256,6 +252,9 @@ out:
     debug("finished handling GET request for %s", uri);
 
     reader_unlock(rwlock);
+    pthread_mutex_lock(&mu);
+    ht_release(ht, uri);
+    pthread_mutex_unlock(&mu);
     if (fd >= 0) {
         close(fd);
     }
@@ -277,11 +276,7 @@ void handle_put(conn_t *conn) {
 
     pthread_mutex_lock(&mu);
 
-    rwlock = ht_lookup(ht, uri);
-
-    if (!rwlock) {
-        rwlock = ht_insert(ht, uri);
-    }
+    rwlock = ht_acquire(ht, uri);
 
     pthread_mutex_unlock(&mu);
     if (!rwlock) {
@@ -330,6 +325,11 @@ out:
 
     if (locked) {
         writer_unlock(rwlock);
+    }
+    if (rwlock) {
+        pthread_mutex_lock(&mu);
+        ht_release(ht, uri);
+        pthread_mutex_unlock(&mu);
     }
 }
 

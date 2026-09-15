@@ -1,7 +1,7 @@
 /**
- * @File queue.h
+ * @file queue.h
  *
- * The header file that you need to implement for assignment 3.
+ * Bounded, blocking FIFO queue for concurrent producers and consumers.
  *
  * @author Andrew Quinn
  */
@@ -12,49 +12,30 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-/** @struct queue_t
- *
- *  @brief This typedef renames the struct queue.  Your `c` file
- *  should define the variables that you need for your queue.
- */
+/** Opaque queue. Stored pointers remain owned by the caller. */
 typedef struct queue queue_t;
 
-/** @brief Dynamically allocates and initializes a new queue with a
- *         maximum size, size
- *
- *  @param size the maximum size of the queue
- *
- *  @return a pointer to a new queue_t
+/** Allocate a queue holding at most size pointers.
+ * size must be positive. Returns NULL for invalid capacity, allocation failure,
+ * or failure to initialize the POSIX semaphores. Requires Linux semaphore
+ * support; there is no shutdown or cancellation operation.
  */
 queue_t *queue_new(int size);
 
-/** @brief Delete your queue and free all of its memory.
- *
- *  @param q the queue to be deleted.  Note, you should assign the
- *  passed in pointer to NULL when returning (i.e., you should set
- *  *q = NULL after deallocation).
- *
+/** Release queue storage and set *q to NULL. NULL arguments are accepted.
+ * No other thread may use or wait on the queue during deletion. Stored elements
+ * are not freed; drain the queue first if they require cleanup.
  */
 void queue_delete(queue_t **q);
 
-/** @brief push an element onto a queue
- *
- *  @param q the queue to push an element into.
- *
- *  @param elem th element to add to the queue
- *
- *  @return A bool indicating success or failure.  Note, the function
- *          should succeed unless the q parameter is NULL.
+/** Append elem, blocking until capacity is available. elem may be NULL.
+ * Returns false for a NULL queue or semaphore wait failure, otherwise true.
+ * Interrupted waits are retried; no timeout is imposed.
  */
 bool queue_push(queue_t *q, void *elem);
 
-/** @brief pop an element from a queue.
- *
- *  @param q the queue to pop an element from.
- *
- *  @param elem a place to assign the poped element.
- *
- *  @return A bool indicating success or failure.  Note, the function
- *          should succeed unless the q parameter is NULL.
+/** Remove the oldest element into *elem, blocking until an element is available.
+ * Returns false for a NULL queue/output pointer or semaphore wait failure,
+ * otherwise true. Interrupted waits are retried; no timeout is imposed.
  */
 bool queue_pop(queue_t *q, void **elem);

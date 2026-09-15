@@ -14,7 +14,7 @@ OBJECTS = $(BUILD_DIR)/httpserver.o $(SUPPORT_OBJECTS)
 LIBRARY = $(BUILD_DIR)/libhttp-support.a
 BINARY = $(BUILD_DIR)/httpserver
 
-.PHONY: all clean test test-course test-regression
+.PHONY: all clean test test-workloads test-regression
 all: $(BINARY)
 
 $(BINARY): $(BUILD_DIR)/httpserver.o $(LIBRARY)
@@ -29,13 +29,13 @@ $(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir -p $@
 
-test: test-regression test-course
+test: test-regression test-workloads
 
 test-regression: $(BINARY)
 	$(PYTHON) tests/test_httpserver.py --binary $(abspath $(BINARY)) --report-dir $(abspath $(REPORT_DIR))/regression
 
-test-course: $(BINARY)
-	$(PYTHON) tests/run_course.py --binary $(abspath $(BINARY)) --report-dir $(abspath $(REPORT_DIR))/course
+test-workloads: $(BINARY)
+	$(PYTHON) tests/run_workloads.py --binary $(abspath $(BINARY)) --report-dir $(abspath $(REPORT_DIR))/workloads
 
 clean:
 	rm -rf $(BUILD_DIR)

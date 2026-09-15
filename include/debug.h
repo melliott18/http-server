@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+// Diagnostic logging is compiled out unless DEBUG is defined. Callers must not
+// depend on argument evaluation when logging is disabled.
 #ifdef DEBUG
 #define debug(...)                                                                                 \
     do {                                                                                           \
