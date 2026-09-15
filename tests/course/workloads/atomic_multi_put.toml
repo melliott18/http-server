@@ -1,0 +1,194 @@
+# The five original payload files were absent from the import.
+# run_course.py generates five distinct deterministic 180KB substitutes.
+# Five stalled PUTs require at least five workers; this case uses five.
+# 1) Start a PUT request.
+# 2) Send a full GET request..
+# 3) Finish PUT request body.
+
+[[events]]
+type = "LOAD"
+infile = "test_files/frankenstein.txt"
+outfile = "contended.txt"
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/generated-payload-0.txt"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/generated-payload-1.txt"
+id = 1
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/generated-payload-2.txt"
+id = 2
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/generated-payload-3.txt"
+id = 3
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/generated-payload-4.txt"
+id = 4
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 0
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 1
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 2
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 3
+
+# PUT line
+[[events]]
+type = "SEND_LINE"
+id = 4
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 0
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 1
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 2
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 3
+
+# PUT headers
+[[events]]
+type = "SEND_HEADERS"
+id = 4
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 0
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 1
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 2
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 3
+
+# PUT half of body.
+[[events]]
+type = "SEND_BODY"
+size = 75000
+id = 4
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 4
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 3
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 2
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 1
+
+# PUT other half of body.
+[[events]]
+type = "SEND_BODY"
+size = -1
+id = 0
+
+[[events]]
+type = "WAIT"
+id = 4
+
+[[events]]
+type = "WAIT"
+id = 3
+
+[[events]]
+type = "WAIT"
+id = 2
+
+[[events]]
+type = "WAIT"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "GET"
+uri = "contended.txt"
+id = 6
+
+[[events]]
+type = "SEND_ALL"
+id = 6
+
+[[events]]
+type = "WAIT"
+id = 6
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"

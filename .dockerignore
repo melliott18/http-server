@@ -1,0 +1,11 @@
+**
+!Dockerfile
+!Makefile
+!src/
+!src/**
+!include/
+!include/**
+!tests/
+!tests/**
+**/__pycache__/
+**/*.pyc

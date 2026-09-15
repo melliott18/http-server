@@ -1,0 +1,63 @@
+# The imported case attached bodies to GET requests while describing PUTs.
+# Exercise its atomic-read intent with a partial GET response instead:
+# 1) Start reading the old large file through a small receive buffer.
+# 2) Submit a complete PUT with different contents while GET is outstanding.
+# 3) Drain the old GET and PUT, then verify a fresh GET sees the replacement.
+
+[[events]]
+type = "LOAD"
+infile = "test_files/frankenstein.txt"
+outfile = "contended.txt"
+
+[[events]]
+type = "CREATE"
+method = "GET"
+uri = "contended.txt"
+block = 4096
+id = 0
+
+[[events]]
+type = "SEND_ALL"
+id = 0
+
+[[events]]
+type = "RECV_PARTIAL"
+size = 750
+id = 0
+
+[[events]]
+type = "CREATE"
+method = "PUT"
+uri = "contended.txt"
+infile = "test_files/ipanema.txt"
+id = 1
+
+[[events]]
+type = "SEND_ALL"
+id = 1
+
+[[events]]
+type = "WAIT"
+id = 0
+
+[[events]]
+type = "WAIT"
+id = 1
+
+[[events]]
+type = "CREATE"
+method = "GET"
+uri = "contended.txt"
+id = 2
+
+[[events]]
+type = "SEND_ALL"
+id = 2
+
+[[events]]
+type = "WAIT"
+id = 2
+
+[[events]]
+type = "UNLOAD"
+file = "contended.txt"
