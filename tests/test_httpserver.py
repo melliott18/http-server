@@ -196,17 +196,37 @@ class HTTPServerTests(unittest.TestCase):
     def test_stalled_readers_release_workers_and_file_locks(self):
         (self.root / "large.dat").write_bytes(b"x" * (8 * 1024 * 1024))
         with ExitStack() as stack:
-            for _ in range(4):
+            expected = set()
+            for index in range(4):
                 client = stack.enter_context(socket.socket())
                 client.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
                 client.settimeout(3)
                 client.connect(("127.0.0.1", self.port))
-                client.sendall(b"GET /large.dat HTTP/1.1\r\n\r\n")
+                request_id = f"stalled-{index}"
+                client.sendall((f"GET /large.dat HTTP/1.1\r\n"
+                                f"Request-Id: {request_id}\r\n\r\n").encode())
+                expected.add(f"GET,/large.dat,200,{request_id}")
                 # Verify each worker has started sending, then stop consuming.
                 self.assertEqual(client.recv(1), b"H")
-            response = self.raw(b"GET /missing HTTP/1.1\r\n\r\n", timeout=14)
-            self.assertEqual(response, (404, b"Not Found\n"))
-            # Readers still holding the filename lock would block replacement.
+            started = time.monotonic()
+            deadline = started + 25
+            # One missing-file response would prove only one worker recovered.
+            # A partial socket write may start another ten-second inactivity
+            # wait. Keep every client open until all four GETs finish sending,
+            # with a bounded allowance for this fixture's two waits and scheduling.
+            while True:
+                self.assertIsNone(self.process.poll(), "Server exited while readers were stalled")
+                completed = set((self.root / "server.log").read_text().splitlines())
+                missing = expected - completed
+                if not missing:
+                    break
+                self.assertLess(time.monotonic(), deadline,
+                                f"Stalled readers unfinished after {time.monotonic() - started:.1f}s: "
+                                f"{sorted(missing)}")
+                time.sleep(0.05)
+            self.assertEqual(self.request("GET", "missing"), (404, b"Not Found\n"))
+            # Audit records precede reader_unlock, so the ordinary three-second
+            # PUT/GET still verifies that every filename lock is released.
             self.assertEqual(self.request("PUT", "large.dat", b"replacement")[0], 200)
             self.assertEqual(self.request("GET", "large.dat"), (200, b"replacement"))
 

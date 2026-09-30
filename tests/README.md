@@ -23,7 +23,9 @@ IDs, worker recovery from stalled readers and writers, upload cleanup, and bound
 resident memory after 16,384 distinct missing-file requests. The memory check in
 `test_lock_lifecycle.py` reads Linux `/proc` after allocator warmup. Each test starts
 a server with a temporary document root. Ordinary client operations time out after
-three seconds; the server-inactivity checks allow up to 15 seconds.
+three seconds. Stalled-sender checks allow up to 15 seconds; the stalled-reader
+check allows 25 seconds for all four GET completion records before checking
+worker and file-lock recovery with ordinary three-second requests.
 
 ## Concurrent workloads
 
