@@ -1,5 +1,58 @@
 # Application validation
 
+## Stalled-reader synchronization — 2026-09-30
+
+[Issue #1](https://github.com/melliott18/http-server/issues/1) is addressed by
+waiting for all four distinct stalled GET completion records while every client
+stays open and stops consuming. The wait is bounded at 25 seconds for this
+fixture. The subsequent missing-file GET and replacement PUT/GET retain their
+ordinary three-second timeouts. Since GET emits its audit record immediately
+before releasing its reader lock, the replacement still verifies actual lock
+release. No production source or build configuration changed.
+
+Instrumentation observed three readers finish at 10.156 seconds and the fourth
+at 20.414 seconds in one run. The replacement PUT after all four records took
+0.006 seconds. This demonstrates why observing a single recovered worker before
+a three-second replacement PUT was insufficient. The 25-second fixture allowance
+accommodates a partial write followed by another ten-second socket wait; it is
+not a server request-duration guarantee.
+
+| Check | Result |
+| --- | --- |
+| Focused stalled-reader regression, five consecutive runs | 5/5 passed in 61.639 seconds |
+| Replacement PUT duration after completion barrier | 0.002–0.012 seconds across focused runs |
+| Full `make test` HTTP regressions | 17/17 passed in 44.727 seconds |
+| Full `make test` workload/batch/thread cases | 30/30 passed |
+| Negative control with socket inactivity timeouts disabled | Failed as expected after 25.069 seconds; all four completion records were missing; exit 1 |
+
+Validation used Docker Desktop `linux/arm64`, Linux kernel `6.4.16-linuxkit`,
+Ubuntu 24.04.4, Clang 18.1.3, and Python 3.12.3. Containers ran as UID/GID 10001
+with networking disabled, no mounts, dropped capabilities, no-new-privileges,
+1 GiB memory, two CPUs, and a 256-process limit. The image was built with
+`docker build --target test -t http-server:issue-1 .`; its unchanged application
+`make test` command ran in the full-suite container. A container-side unittest
+harness ran the focused method five times and recorded audit timing; it did not
+change the test's assertions or socket timeouts.
+
+The negative control changed only `CLIENT_IDLE_TIMEOUT_SECONDS` from `10` to `0`
+in a disposable container's source, rebuilt with
+`make BUILD_DIR=build-no-idle -j2`, and ran the same focused method once. The repository and normal test image
+kept their original server sources. Test containers were removed after evidence
+collection. Runtime behavior was unchanged, so this test-only fix did not repeat
+runtime-image checks or validate another architecture or the target VM.
+
+| Input | Identity |
+| --- | --- |
+| Base repository revision | `05e6a3f1c69956994978d2d12c67e41d3b5aed29` |
+| Test image ID | `sha256:fd67527ce099dbf886b2567b2d64e62d67b27ee5184caf71f5e88a8288e76638` |
+| Unchanged server binary SHA-256 | `6f63ec2fda7f5024e3ba81d155b4dd80cc038c598866eeae3be1476b2b4e5717` |
+| Updated `tests/test_httpserver.py` SHA-256 | `413df3ce947be793f7a3c008014c24c7611fdc4e6452fb20ffacf3cc4556ddd2` |
+| Compact sorted 60-file build/test input manifest SHA-256 | `07fdcbaf75190bcafc69ab5339c202967519b5cb2aa9fc0a52e016c5956470d9` |
+
+Ignored `test-results/issue-1/` retains the build log, focused instrumentation
+script/log, negative-control script/log, environment record, input manifest, and
+full-suite JUnit/log reports. These are local evidence, not published artifacts.
+
 ## Repository extraction — 2026-09-30
 
 Validated the standalone repository root on Docker Desktop `linux/arm64`, using
