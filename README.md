@@ -1,8 +1,15 @@
-# C HTTP server
+# HTTP Server
 
 A Linux file service written in C with POSIX threads. It supports GET and PUT for a single filename in its working directory, with a bounded worker queue and per-file reader/writer locks. PUT creates or replaces persistent files. Audit records go to standard error.
 
-This is standalone application preparation for [#17](https://github.com/melliott18/pipeline/issues/17). Jenkins, Terraform provisioning, the shared application manifest, and automated releases are not implemented here. See the [operations guide](OPERATIONS.md) for deployment requirements and [validation evidence](VALIDATION.md) for measured compatibility.
+This standalone project includes the server, support library, Docker build, and application tests. See the [operations guide](OPERATIONS.md) for deployment requirements and [validation evidence](VALIDATION.md) for measured compatibility. Repository history and contribution instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Clone the repository and enter its root before running the commands below:
+
+```sh
+git clone https://github.com/melliott18/http-server.git
+cd http-server
+```
 
 ## Layout
 
@@ -16,18 +23,18 @@ This is standalone application preparation for [#17](https://github.com/melliott
 
 ## Build and test in Docker
 
-Run these commands from `examples/c-http-server/`. Docker must be running; no host C compiler or Python installation is needed. Building downloads Ubuntu packages; running the tests needs no external network.
+Run these commands from the repository root. Docker must be running; no host C compiler or Python installation is needed. Building downloads Ubuntu packages; running the tests needs no external network.
 
 ```sh
-docker build --target test -t c-http-server:test .
-docker run --name c-http-server-tests --network none c-http-server:test
+docker build --target test -t http-server:test .
+docker run --name http-server-tests --network none http-server:test
 ```
 
 The test command exits nonzero on failure. After either success or failure, copy the test reports and remove its disposable container:
 
 ```sh
-docker cp c-http-server-tests:/app/test-results ./test-results
-docker rm c-http-server-tests
+docker cp http-server-tests:/app/test-results ./test-results
+docker rm http-server-tests
 ```
 
 Tests run as UID/GID 10001, in disposable directories, without mounting the repository or real application data. Both suites write JUnit XML and retained logs beneath `test-results/`. Regression results also appear in the container output.
@@ -37,8 +44,8 @@ The default Ubuntu 24.04 base image is pinned by digest. To test Ubuntu 26.04, u
 ```sh
 docker build --target test \
   --build-arg UBUNTU_IMAGE=ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d \
-  -t c-http-server:test-26.04 .
-docker run --rm --network none c-http-server:test-26.04
+  -t http-server:test-26.04 .
+docker run --rm --network none http-server:test-26.04
 ```
 
 Package versions come from the Ubuntu repository at build time; the base digest alone does not freeze the compiler packages. Record resolved versions with test evidence. Record package versions as well as the base image when reproducing a build.
@@ -48,29 +55,29 @@ Package versions come from the Ubuntu repository at build time; the base digest 
 Build the final runtime stage, create a dedicated data volume, and publish the server only on the local machine:
 
 ```sh
-docker build --target runtime -t c-http-server:local .
-docker volume create c-http-server-data
-docker run -d --name c-http-server \
+docker build --target runtime -t http-server:local .
+docker volume create http-server-data
+docker run -d --name http-server \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --memory 128m --cpus 2 --pids-limit 128 \
   --publish 127.0.0.1:8080:8080 \
-  --mount type=volume,source=c-http-server-data,target=/data \
-  c-http-server:local
+  --mount type=volume,source=http-server-data,target=/data \
+  http-server:local
 curl --fail --request PUT --data-binary 'Hello from the C server!' http://127.0.0.1:8080/hello.txt
 curl --fail http://127.0.0.1:8080/hello.txt
-docker logs c-http-server
+docker logs http-server
 ```
 
 The example resource settings are development limits, not measured capacity guarantees. If port 8080 is occupied, change the first port in `127.0.0.1:8080:8080`. The process runs as UID/GID 10001. A newly created volume inherits `/data` ownership; an existing volume or bind directory must be writable by that identity. Never mount source code, credentials, or unrelated host files as the data directory.
 
-`docker stop c-http-server` stops the process. Removing and recreating the container with the same named volume preserves uploaded files; removing the volume deletes them. Do not delete the volume when upgrading an image. A PUT replaces a file through a temporary file and rename; image rollback does not restore older file contents.
+`docker stop http-server` stops the process. Removing and recreating the container with the same named volume preserves uploaded files; removing the volume deletes them. Do not delete the volume when upgrading an image. A PUT replaces a file through a temporary file and rename; image rollback does not restore older file contents.
 
 ## Check the runtime image
 
 The host-side check uses Docker and Python 3.11 or newer. It resolves the specified image tag to a local immutable image ID, then tests non-root startup, binary PUT/GET, concurrent requests, and persistence across container replacement. It creates and removes only its own temporary containers and volume:
 
 ```sh
-python3 tests/test_container.py --image c-http-server:local \
+python3 tests/test_container.py --image http-server:local \
   --report test-results/runtime.json
 ```
 

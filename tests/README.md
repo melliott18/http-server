@@ -1,6 +1,6 @@
 # Application tests
 
-Run from `examples/c-http-server/` after building the server:
+Run from the repository root after building the server:
 
 ```sh
 python3 tests/test_httpserver.py --binary build/httpserver --report-dir test-results/regression
@@ -93,6 +93,6 @@ persistence across container replacement. It resolves the image tag to a local
 immutable image ID and removes its own temporary containers and volume:
 
 ```sh
-python3 tests/test_container.py --image c-http-server:local \
+python3 tests/test_container.py --image http-server:local \
   --report test-results/runtime.json
 ```

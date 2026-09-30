@@ -1,0 +1,13 @@
+# Local builds, test reports, and persistent development data.
+/build/
+/build-*/
+/test-results/
+/data/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Local secrets and configuration.
+.env
+.env.*
+!.env.example

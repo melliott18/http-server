@@ -34,14 +34,14 @@ and container limits require measurement against the intended workload.
 - Decide access, retention, backup location, and acceptable data loss before
   storing important data. Keep backups outside the disposable container and
   outside Git. Existing source author notices remain in the code; distribution
-  licensing is tracked in [decision O05](../../docs/decisions.md#open-decisions-and-evidence).
+  licensing has not been selected; see [project provenance](CONTRIBUTING.md#provenance-and-licensing).
 
 ## Shutdown and recovery
 
 1. Stop admission of new requests at the access boundary. Allow existing clients
    to finish according to the configured request deadline. The process itself
    does not implement graceful request draining.
-2. Stop the container using the documented `docker stop c-http-server` command.
+2. Stop the container using the documented `docker stop http-server` command.
    Forced or immediate termination may leave `.httpserver_upload-*` staging
    files. Inspect and remove confirmed abandoned staging files only after the
    service is stopped; never remove the volume as part of a release.
@@ -62,6 +62,6 @@ Choose a backup and durability policy that accounts for this behavior.
 A production release needs evidence for the actual Linux host/CPU, expected
 concurrency and file sizes, admission controls, disk exhaustion behavior, log
 retention, shutdown, and backup/restore. The standalone test suites establish
-application behavior; the shared manifest, Jenkins workflow, image qualification,
-and automated deployment remain tracked under
-[#17](https://github.com/melliott18/pipeline/issues/17) and its dependencies.
+application behavior. Shared platform integration, image qualification, and
+automated deployment are separate work in the
+[Pipeline project](https://github.com/melliott18/pipeline/issues/17).
